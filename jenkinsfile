@@ -1,0 +1,49 @@
+pipeline {
+  agent any
+  environment {
+    AWS_REGION = 'us-east-1'         // placeholder: set to your region
+    AWS_ACCOUNT_ID = '<AWS_ACCOUNT_ID>' // placeholder
+    ECR_REPO = '<ECR_REPO_NAME>'        // placeholder
+    IMAGE_TAG = "${env.BUILD_ID}"
+  }
+  stages {
+    stage('Checkout') {
+      steps {
+        checkout scm
+      }
+    }
+    stage('Build Docker image') {
+      steps {
+        sh "docker build -t ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO}:${IMAGE_TAG} ./site"
+      }
+    }
+    stage('Login to ECR') {
+      steps {
+        withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: '<JENKINS_AWS_CREDENTIALS_ID>']]) {
+          sh """
+            aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com
+          """
+        }
+      }
+    }
+    stage('Push to ECR') {
+      steps {
+        sh "docker push ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO}:${IMAGE_TAG}"
+      }
+    }
+    stage('Deploy to app EC2') {
+      steps {
+        // Option A — SSH & docker pull & restart
+        sshagent (credentials: ['<SSH_CREDENTIAL_ID_FOR_EC2>']) {
+          sh """
+            ssh -o StrictHostKeyChecking=no ec2-user@${APP_EC2_PUBLIC_IP} '
+              docker pull ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO}:${IMAGE_TAG} &&
+              docker rm -f static-ecom || true &&
+              docker run -d --name static-ecom -p 80:80 ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO}:${IMAGE_TAG}
+            '
+          """
+        }
+      }
+    }
+  }
+}

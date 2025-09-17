@@ -1,0 +1,27 @@
+# terraform
+terraform/.terraform/
+terraform/terraform.tfstate
+terraform/terraform.tfstate.backup
+terraform/.terraform.lock.hcl
+*.tfvars
+
+# sensitive
+.env
+*.pem
+id_rsa
+id_rsa.pub
+
+# OS
+.DS_Store
+Thumbs.db
+
+# node/build
+node_modules/
+dist/
+
+# docker
+Dockerfile
+docker-compose.override.yml
+
+# logs
+*.log

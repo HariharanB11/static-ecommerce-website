@@ -1,0 +1,21 @@
+# Ignore Terraform state files
+*.tfstate
+*.tfstate.backup
+.terraform/
+
+# Ignore Git files
+.git
+.gitignore
+.gitattributes
+
+# Ignore OS junk
+.DS_Store
+Thumbs.db
+
+# Ignore editor/project configs
+.vscode
+.idea
+
+# Ignore sensitive files
+*.pem
+*.key
