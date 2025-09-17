@@ -10,4 +10,5 @@ COPY . /usr/share/nginx/html
 # Expose default Nginx port
 EXPOSE 80
 
-# Start nginx (default CMD from base image runs nginx)
+# Start nginx 
+
