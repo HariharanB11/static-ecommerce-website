@@ -3,7 +3,7 @@ pipeline {
   environment {
     AWS_REGION = 'us-east-1'         // update
     AWS_ACCOUNT_ID = '841162688608' 
-    ECR_REPO = '841162688608.dkr.ecr.us-east-1.amazonaws.com/static-ecommerce'        // Update
+    ECR_REPO = 'static-ecommerce'        // Update
     IMAGE_TAG = "${env.BUILD_ID}"
     APP_EC2_PUBLIC_IP = '54.90.145.190'               //update
   }
