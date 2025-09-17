@@ -2,10 +2,10 @@ pipeline {
   agent any
 
   environment {
-    AWS_REGION      = "us-east-1"
-    AWS_ACCOUNT_ID  = "841162688608"
-    ECR_REPO        = "static-ecommerce"
-    IMAGE_TAG       = "${BUILD_NUMBER}"
+    AWS_REGION        = "us-east-1"
+    AWS_ACCOUNT_ID    = "841162688608"
+    ECR_REPO          = "static-ecommerce"
+    IMAGE_TAG         = "${BUILD_NUMBER}"
     APP_EC2_PUBLIC_IP = "54.90.145.190"
   }
 
@@ -23,13 +23,15 @@ pipeline {
 
     stage('Login & Push to ECR') {
       steps {
-        script {
-          sh """
-            aws ecr get-login-password --region ${AWS_REGION} \
-              | docker login --username AWS --password-stdin ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com
+        withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-ecr-cred']]) {
+          script {
+            sh """
+              aws ecr get-login-password --region ${AWS_REGION} \
+                | docker login --username AWS --password-stdin ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com
 
-            docker push ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO}:${IMAGE_TAG}
-          """
+              docker push ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO}:${IMAGE_TAG}
+            """
+          }
         }
       }
     }
