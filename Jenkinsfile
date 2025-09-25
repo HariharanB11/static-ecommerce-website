@@ -5,15 +5,24 @@ pipeline {
     choice(
       name: 'ACTION',
       choices: ['create', 'destroy'],
-      description: 'Choose whether to create infra and deploy app OR destroy infra' 
+      description: 'Choose whether to create infra and deploy app OR destroy infra'
+    )
+    string(
+      name: 'AWS_ACCOUNT_ID',
+      defaultValue: '411571901235',
+      description: 'AWS Account ID'
+    )
+    string(
+      name: 'KEY_PAIR_NAME',
+      defaultValue: 'my-keypair',
+      description: 'EC2 Key Pair Name'
     )
   }
 
   environment {
-    AWS_REGION     = "us-east-1"
-    AWS_ACCOUNT_ID = "411571901235"
-    ECR_REPO       = "static-ecommerce"
-    IMAGE_TAG      = "${BUILD_NUMBER}"
+    AWS_REGION = "us-east-1"
+    ECR_REPO   = "static-ecommerce"
+    IMAGE_TAG  = "${BUILD_NUMBER}"
   }
 
   stages {
@@ -36,8 +45,12 @@ pipeline {
       when { expression { params.ACTION == 'create' } }
       steps {
         dir('terraform') {
-          sh "terraform plan -out=tfplan"
-          sh "terraform apply -auto-approve tfplan"
+          sh """
+            terraform plan -out=tfplan \
+              -var="aws_account_id=${params.AWS_ACCOUNT_ID}" \
+              -var="key_pair_name=${params.KEY_PAIR_NAME}"
+            terraform apply -auto-approve tfplan
+          """
         }
       }
     }
@@ -46,7 +59,11 @@ pipeline {
       when { expression { params.ACTION == 'destroy' } }
       steps {
         dir('terraform') {
-          sh "terraform destroy -auto-approve"
+          sh """
+            terraform destroy -auto-approve \
+              -var="aws_account_id=${params.AWS_ACCOUNT_ID}" \
+              -var="key_pair_name=${params.KEY_PAIR_NAME}"
+          """
         }
       }
     }
@@ -84,7 +101,7 @@ pipeline {
       when { expression { params.ACTION == 'create' } }
       steps {
         echo "Tagging Docker image for ECR..."
-        sh "docker tag ${ECR_REPO}:${IMAGE_TAG} ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO}:${IMAGE_TAG}"
+        sh "docker tag ${ECR_REPO}:${IMAGE_TAG} ${params.AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO}:${IMAGE_TAG}"
       }
     }
 
@@ -93,7 +110,7 @@ pipeline {
       steps {
         echo "Logging in to AWS ECR..."
         withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-ecr-cred']]) {
-          sh "aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
+          sh "aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${params.AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
         }
       }
     }
@@ -102,7 +119,7 @@ pipeline {
       when { expression { params.ACTION == 'create' } }
       steps {
         echo "Pushing Docker image to AWS ECR..."
-        sh "docker push ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO}:${IMAGE_TAG}"
+        sh "docker push ${params.AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO}:${IMAGE_TAG}"
       }
     }
 
@@ -113,10 +130,10 @@ pipeline {
         sshagent (credentials: ['app-ec2-ssh']) {
           sh """
             ssh -o StrictHostKeyChecking=no ec2-user@${APP_EC2_PUBLIC_IP} '
-              aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com &&
-              docker pull ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO}:${IMAGE_TAG} &&
+              aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${params.AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com &&
+              docker pull ${params.AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO}:${IMAGE_TAG} &&
               docker rm -f static-ecom || true &&
-              docker run -d --restart unless-stopped --name static-ecom -p 80:80 ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO}:${IMAGE_TAG} &&
+              docker run -d --restart unless-stopped --name static-ecom -p 80:80 ${params.AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO}:${IMAGE_TAG} &&
               docker image prune -f
             '
           """
@@ -153,4 +170,6 @@ pipeline {
       echo "❌ Pipeline failed. Please check Jenkins logs."
     }
   }
+}
+
 }
