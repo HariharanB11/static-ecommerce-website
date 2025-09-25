@@ -40,6 +40,7 @@ resource "aws_instance" "this" {
     region         = var.region
     docker_compose = var.use_docker_compose
     app_image_tag  = var.app_image_tag
+    aws_account_id  = var.aws_account_id
   })
 
   tags = {

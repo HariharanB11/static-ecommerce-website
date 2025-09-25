@@ -1,4 +1,4 @@
-# Use lightweight Nginx image
+# lightweight Nginx image
 FROM nginx:stable-alpine
 
 # Remove default nginx index

@@ -12,3 +12,9 @@ variable "ecr_repo" { default = "" }
 variable "region" { default = "us-east-1" }
 variable "use_docker_compose" { default = true }
 variable "app_image_tag" { default = "latest" }
+variable "aws_account_id" {
+  description = "AWS Account ID"
+  type        = string
+  default     = ""
+}
+
