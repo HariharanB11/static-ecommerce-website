@@ -6,7 +6,7 @@ pipeline {
     AWS_ACCOUNT_ID    = "411571901235"
     ECR_REPO          = "static-ecommerce"
     IMAGE_TAG         = "${BUILD_NUMBER}"
-    APP_EC2_PUBLIC_IP = "18.144.174.71"   //Update App Public-IP
+    APP_EC2_PUBLIC_IP = "54.177.51.159"   //Update App Public-IP
   }
 
   stages {
