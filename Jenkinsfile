@@ -5,7 +5,7 @@ pipeline {
     choice(
       name: 'ACTION',
       choices: ['create', 'destroy'],
-      description: 'Choose whether to create infra and deploy app OR destroy infra'
+      description: 'Choose whether to create infra and deploy app OR destroy infra' 
     )
   }
 
