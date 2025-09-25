@@ -36,7 +36,9 @@ pipeline {
     stage('Terraform Init') {
       steps {
         dir('terraform') {
-          sh "terraform init"
+          withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-creds']]) {
+            sh "terraform init"
+          }
         }
       }
     }
@@ -45,12 +47,14 @@ pipeline {
       when { expression { params.ACTION == 'create' } }
       steps {
         dir('terraform') {
-          sh """
-            terraform plan -out=tfplan \
-              -var="aws_account_id=${params.AWS_ACCOUNT_ID}" \
-              -var="key_pair_name=${params.KEY_PAIR_NAME}"
-            terraform apply -auto-approve tfplan
-          """
+          withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-creds']]) {
+            sh """
+              terraform plan -out=tfplan \
+                -var="aws_account_id=${params.AWS_ACCOUNT_ID}" \
+                -var="key_pair_name=${params.KEY_PAIR_NAME}"
+              terraform apply -auto-approve tfplan
+            """
+          }
         }
       }
     }
@@ -59,11 +63,13 @@ pipeline {
       when { expression { params.ACTION == 'destroy' } }
       steps {
         dir('terraform') {
-          sh """
-            terraform destroy -auto-approve \
-              -var="aws_account_id=${params.AWS_ACCOUNT_ID}" \
-              -var="key_pair_name=${params.KEY_PAIR_NAME}"
-          """
+          withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-creds']]) {
+            sh """
+              terraform destroy -auto-approve \
+                -var="aws_account_id=${params.AWS_ACCOUNT_ID}" \
+                -var="key_pair_name=${params.KEY_PAIR_NAME}"
+            """
+          }
         }
       }
     }
@@ -171,4 +177,5 @@ pipeline {
     }
   }
 }
+
 
