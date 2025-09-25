@@ -14,7 +14,7 @@ pipeline {
     )
     string(
       name: 'KEY_PAIR_NAME',
-      defaultValue: 'my-keypair',
+      defaultValue: 'demo-key',
       description: 'EC2 Key Pair Name'
     )
   }
