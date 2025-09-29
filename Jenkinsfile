@@ -1,200 +1,187 @@
 pipeline {
-  agent any
+    agent any
 
-  parameters {
-    choice(
-      name: 'ACTION',
-      choices: ['create', 'destroy'],
-      description: 'Choose whether to create infra and deploy app OR destroy infra'
-    )
-    string(
-      name: 'AWS_ACCOUNT_ID',
-      defaultValue: '411571901235',
-      description: 'AWS Account ID'
-    )
-    string(
-      name: 'KEY_PAIR_NAME',
-      defaultValue: 'demo-key',
-      description: 'EC2 Key Pair Name'
-    )
-  }
-
-  environment {
-    AWS_REGION = "us-east-1"
-    ECR_REPO   = "static-ecommerce"
-    IMAGE_TAG  = "${BUILD_NUMBER}"
-    ECR_REPO_URL = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO}"
-  }
-
-  stages {
-
-    stage('Checkout Source Code') {
-      steps {
-        echo "Checking out code from GitHub..."
-        checkout scm
-      }
+    parameters {
+        choice(
+            name: 'ACTION',
+            choices: ['create', 'destroy'],
+            description: 'Choose whether to create infra and deploy app OR destroy infra'
+        )
+        string(
+            name: 'AWS_ACCOUNT_ID',
+            defaultValue: '411571901235',
+            description: 'AWS Account ID'
+        )
+        string(
+            name: 'KEY_PAIR_NAME',
+            defaultValue: 'demo-key',
+            description: 'EC2 Key Pair Name'
+        )
     }
 
-    stage('Terraform Init') {
-      steps {
-        dir('terraform') {
-          withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-creds']]) {
-            sh "terraform init"
-          }
+    environment {
+        AWS_REGION = "us-east-1"
+        ECR_REPO = "static-ecommerce"
+        IMAGE_TAG = "${BUILD_NUMBER}"
+        ECR_REPO_URL = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO}"
+    }
+
+    stages {
+
+        stage('Checkout Source Code') {
+            steps {
+                echo "Checking out code from GitHub..."
+                checkout scm
+            }
         }
-      }
-    }
 
-    stage('Terraform Apply') {
-      when { expression { params.ACTION == 'create' } }
-      steps {
-        dir('terraform') {
-          withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-creds']]) {
-            sh """
-              terraform plan -out=tfplan \
-                -var="aws_account_id=${params.AWS_ACCOUNT_ID}" \
-                -var="key_pair_name=${params.KEY_PAIR_NAME}"
-              terraform apply -auto-approve tfplan
-            """
-          }
+        stage('Terraform Init') {
+            steps {
+                dir('terraform') {
+                    withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-creds']]) {
+                        sh "terraform init"
+                    }
+                }
+            }
         }
-      }
-    }
 
-    stage('Terraform Destroy') {
-      when { expression { params.ACTION == 'destroy' } }
-      steps {
-        dir('terraform') {
-          withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-creds']]) {
-            sh """
-              terraform destroy -auto-approve \
-                -var="aws_account_id=${params.AWS_ACCOUNT_ID}" \
-                -var="key_pair_name=${params.KEY_PAIR_NAME}"
-            """
-          }
+        stage('Terraform Apply') {
+            when { expression { params.ACTION == 'create' } }
+            steps {
+                dir('terraform') {
+                    withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-creds']]) {
+                        sh """
+                            terraform plan -out=tfplan \
+                                -var="aws_account_id=${params.AWS_ACCOUNT_ID}" \
+                                -var="key_pair_name=${params.KEY_PAIR_NAME}"
+                            terraform apply -auto-approve tfplan
+                        """
+                    }
+                }
+            }
         }
-      }
-    }
 
-    stage('Get Terraform Outputs') {
-      when { expression { params.ACTION == 'create' } }
-      steps {
-        dir('terraform') {
-          script {
-            APP_EC2_PUBLIC_IP = sh(script: "terraform output -raw app_instance_public_ip", returnStdout: true).trim()
-            echo "EC2 Public IP: ${APP_EC2_PUBLIC_IP}"
-            env.APP_EC2_PUBLIC_IP = APP_EC2_PUBLIC_IP
-          }
+        stage('Terraform Destroy') {
+            when { expression { params.ACTION == 'destroy' } }
+            steps {
+                dir('terraform') {
+                    withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-creds']]) {
+                        sh """
+                            terraform destroy -auto-approve \
+                                -var="aws_account_id=${params.AWS_ACCOUNT_ID}" \
+                                -var="key_pair_name=${params.KEY_PAIR_NAME}"
+                        """
+                    }
+                }
+            }
         }
-      }
-    }
 
-    stage('Validate Dockerfile') {
-      when { expression { params.ACTION == 'create' } }
-      steps {
-        echo "Validating Dockerfile syntax..."
-        sh "hadolint site/Dockerfile || true"
-      }
-    }
-
-    stage('Build Docker Image') {
-      when { expression { params.ACTION == 'create' } }
-      steps {
-        echo "Building Docker image..."
-        sh "docker build --no-cache -t ${ECR_REPO}:${IMAGE_TAG} site/"
-      }
-    }
-
-    stage('Tag Docker Image') {
-      when { expression { params.ACTION == 'create' } }
-      steps {
-        echo "Tagging Docker image for ECR..."
-        sh "docker tag ${ECR_REPO}:${IMAGE_TAG} ${ECR_REPO_URL}:${IMAGE_TAG}"
-      }
-    }
-
-    stage('Login to AWS ECR') {
-      when { expression { params.ACTION == 'create' } }
-      steps {
-        echo "Logging in to AWS ECR..."
-        withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-creds']]) {
-          sh '''
-            ECR_REGISTRY=$(echo ${ECR_REPO_URL} | cut -d/ -f1)
-            aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin $ECR_REGISTRY
-          '''
+        stage('Get Terraform Outputs') {
+            when { expression { params.ACTION == 'create' } }
+            steps {
+                dir('terraform') {
+                    script {
+                        env.APP_EC2_PUBLIC_IP = sh(script: "terraform output -raw app_instance_public_ip", returnStdout: true).trim()
+                        echo "EC2 Public IP: ${env.APP_EC2_PUBLIC_IP}"
+                    }
+                }
+            }
         }
-      }
-    }
 
-    stage('Push Docker Image to ECR') {
-      when { expression { params.ACTION == 'create' } }
-      steps {
-        echo "Pushing Docker image to AWS ECR..."
-        sh "docker push ${ECR_REPO_URL}:${IMAGE_TAG}"
-      }
-    }
-
-    stage('Wait for EC2 to be Ready') {
-      when { expression { params.ACTION == 'create' } }
-      steps {
-        echo "Waiting for EC2 to finish initialization..."
-        sleep(time: 60, unit: 'SECONDS')
-      }
-    }
-
-    stage('Deploy to EC2 Instance') {
-      when { expression { params.ACTION == 'create' } }
-      steps {
-        echo "Deploying application on EC2..."
-        sshagent (credentials: ['app-ec2-ssh']) {
-          sh """
-            ssh -o StrictHostKeyChecking=no ec2-user@${APP_EC2_PUBLIC_IP} '
-              echo "Logging in to AWS ECR..."
-              aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${ECR_REPO_URL%/*} &&
-              echo "Pulling latest Docker image..."
-              docker pull ${ECR_REPO_URL}:${IMAGE_TAG} &&
-              echo "Stopping old container..."
-              docker rm -f static-ecom || true &&
-              echo "Starting new container..."
-              docker run -d --restart unless-stopped --name static-ecom -p 80:80 ${ECR_REPO_URL}:${IMAGE_TAG} &&
-              echo "Cleaning up unused images..."
-              docker image prune -f
-            '
-          """
+        stage('Validate Dockerfile') {
+            when { expression { params.ACTION == 'create' } }
+            steps {
+                sh "hadolint site/Dockerfile || true"
+            }
         }
-      }
-    }
 
-    stage('Verify Deployment') {
-      when { expression { params.ACTION == 'create' } }
-      steps {
-        echo "Verifying if application is running..."
-        sshagent (credentials: ['app-ec2-ssh']) {
-          sh """
-            ssh -o StrictHostKeyChecking=no ec2-user@${APP_EC2_PUBLIC_IP} '
-              docker ps | grep static-ecom
-            '
-          """
+        stage('Build Docker Image') {
+            when { expression { params.ACTION == 'create' } }
+            steps {
+                sh "docker build --no-cache -t ${ECR_REPO}:${IMAGE_TAG} site/"
+            }
         }
-      }
-    }
 
-  }
-
-  post {
-    success {
-      script {
-        if (params.ACTION == 'create') {
-          echo "✅ Deployment successful! Application is live on http://${APP_EC2_PUBLIC_IP}"
-        } else {
-          echo "✅ Terraform destroy completed. Infrastructure removed."
+        stage('Tag Docker Image') {
+            when { expression { params.ACTION == 'create' } }
+            steps {
+                sh "docker tag ${ECR_REPO}:${IMAGE_TAG} ${ECR_REPO_URL}:${IMAGE_TAG}"
+            }
         }
-      }
+
+        stage('Login to AWS ECR') {
+            when { expression { params.ACTION == 'create' } }
+            steps {
+                withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-creds']]) {
+                    sh '''
+                        ECR_REGISTRY=$(echo ${ECR_REPO_URL} | cut -d/ -f1)
+                        aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin $ECR_REGISTRY
+                    '''
+                }
+            }
+        }
+
+        stage('Push Docker Image to ECR') {
+            when { expression { params.ACTION == 'create' } }
+            steps {
+                sh "docker push ${ECR_REPO_URL}:${IMAGE_TAG}"
+            }
+        }
+
+        stage('Wait for EC2 to be Ready') {
+            when { expression { params.ACTION == 'create' } }
+            steps {
+                sleep(time: 60, unit: 'SECONDS')
+            }
+        }
+
+        stage('Deploy to EC2 Instance') {
+            when { expression { params.ACTION == 'create' } }
+            steps {
+                sshagent(['app-ec2-ssh']) {
+                    sh """
+                        ssh -o StrictHostKeyChecking=no ec2-user@${APP_EC2_PUBLIC_IP} '
+                            aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${ECR_REPO_URL%/*} &&
+                            docker pull ${ECR_REPO_URL}:${IMAGE_TAG} &&
+                            docker rm -f static-ecom || true &&
+                            docker run -d --restart unless-stopped --name static-ecom -p 80:80 ${ECR_REPO_URL}:${IMAGE_TAG} &&
+                            docker image prune -f
+                        '
+                    """
+                }
+            }
+        }
+
+        stage('Verify Deployment') {
+            when { expression { params.ACTION == 'create' } }
+            steps {
+                sshagent(['app-ec2-ssh']) {
+                    sh """
+                        ssh -o StrictHostKeyChecking=no ec2-user@${APP_EC2_PUBLIC_IP} '
+                            docker ps | grep static-ecom
+                        '
+                    """
+                }
+            }
+        }
+
     }
-    failure {
-      echo "❌ Pipeline failed. Please check Jenkins logs."
+
+    post {
+        success {
+            script {
+                if (params.ACTION == 'create') {
+                    echo "✅ Deployment successful! Application is live on http://${env.APP_EC2_PUBLIC_IP}"
+                } else {
+                    echo "✅ Terraform destroy completed. Infrastructure removed."
+                }
+            }
+        }
+        failure {
+            echo "❌ Pipeline failed. Please check Jenkins logs."
+        }
     }
-  }
-}
+
+} // end pipeline
 
 
