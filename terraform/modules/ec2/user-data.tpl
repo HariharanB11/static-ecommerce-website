@@ -85,12 +85,12 @@ aws ecr get-login-password --region ${region}
 
 # -----------------------------
 
-echo "Pulling Docker image: ${aws_account_id}.dkr.ecr.${region}.amazonaws.com/${ecr_repo}:${app_image_tag}"
-docker pull ${aws_account_id}.dkr.ecr.${region}.amazonaws.com/${ecr_repo}:${app_image_tag}
+echo "Pulling Docker image: ${aws_account_id}.dkr.ecr.${region}.amazonaws.com/${ecr_repo}:$${app_image_tag}"
+docker pull ${aws_account_id}.dkr.ecr.${region}.amazonaws.com/${ecr_repo}:$${app_image_tag}
 
 docker rm -f static-ecom || true
 docker run -d --restart unless-stopped --name static-ecom -p 80:80 
-${aws_account_id}.dkr.ecr.${region}.amazonaws.com/${ecr_repo}:${app_image_tag}
+${aws_account_id}.dkr.ecr.${region}.amazonaws.com/${ecr_repo}:$${app_image_tag}
 
 # -----------------------------
 
