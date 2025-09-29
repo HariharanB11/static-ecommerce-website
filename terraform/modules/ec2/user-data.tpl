@@ -68,9 +68,9 @@ aws ecr get-login-password --region ${region} \
   | sudo docker login --username AWS --password-stdin ${aws_account_id}.dkr.ecr.${region}.amazonaws.com
 
 # Pull image and run container
-sudo docker pull ${aws_account_id}.dkr.ecr.${region}.amazonaws.com/${ecr_repo}:${app_image_tag}
+sudo docker pull ${aws_account_id}.dkr.ecr.${region}.amazonaws.com/${ecr_repo}$${:}${app_image_tag}
 sudo docker rm -f static-ecom || true
-sudo docker run -d --restart unless-stopped --name static-ecom -p 80$${80} ${aws_account_id}.dkr.ecr.${region}.amazonaws.com/${ecr_repo}:${app_image_tag}
+sudo docker run -d --restart unless-stopped --name static-ecom -p 80$${80} ${aws_account_id}.dkr.ecr.${region}.amazonaws.com/${ecr_repo}$${:}${app_image_tag}
 
 echo "User-data script completed. Docker container '${ecr_repo}' is running on port 80."
 
