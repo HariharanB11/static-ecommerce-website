@@ -113,10 +113,9 @@ pipeline {
             when { expression { params.ACTION == 'create' } }
             steps {
                 withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-creds']]) {
-                    sh '''
-                        ECR_REGISTRY=$(echo ${ECR_REPO_URL} | cut -d/ -f1)
-                        aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin $ECR_REGISTRY
-                    '''
+                    sh """
+                        aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${ECR_REPO_URL.split('/')[0]}
+                    """
                 }
             }
         }
@@ -141,7 +140,7 @@ pipeline {
                 sshagent(['app-ec2-ssh']) {
                     sh """
                         ssh -o StrictHostKeyChecking=no ec2-user@${APP_EC2_PUBLIC_IP} '
-                            aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${ECR_REPO_URL%/*} &&
+                            aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${ECR_REPO_URL.split('/')[0]} &&
                             docker pull ${ECR_REPO_URL}:${IMAGE_TAG} &&
                             docker rm -f static-ecom || true &&
                             docker run -d --restart unless-stopped --name static-ecom -p 80:80 ${ECR_REPO_URL}:${IMAGE_TAG} &&
@@ -182,6 +181,5 @@ pipeline {
         }
     }
 
-} // end pipeline
-
+} // end of pipeline
 
