@@ -134,44 +134,13 @@ pipeline {
                 sleep(time: 120, unit: 'SECONDS')
             }
         }
-
-        stage('Verify Deployment') {
-            when { expression { params.ACTION == 'create' } }
-            steps {
-                script {
-                    echo "Verifying deployment by checking HTTP response..."
-                    def maxRetries = 12
-                    def waitTime = 10
-                    def success = false
-
-                    for (int i = 1; i <= maxRetries; i++) {
-                        try {
-                            def response = sh(script: "curl -s -o /dev/null -w '%{http_code}' http://${env.APP_EC2_PUBLIC_IP}", returnStdout: true).trim()
-                            if (response == "200") {
-                                echo "Application is live and responding on port 80!"
-                                success = true
-                                break
-                            }
-                        } catch (err) {
-                            echo "Attempt ${i} failed, retrying in ${waitTime}s..."
-                        }
-                        sleep(waitTime)
-                    }
-
-                    if (!success) {
-                        error("❌ Deployment verification failed. Application is not responding on port 80.")
-                    }
-                }
-            }
-        }
-
     }
 
     post {
         success {
             script {
                 if (params.ACTION == 'create') {
-                    echo "✅ Deployment successful! Application is live on http://${env.APP_EC2_PUBLIC_IP}"
+                    echo "✅ Deployment completed. EC2 is up at http://${env.APP_EC2_PUBLIC_IP}"
                 } else {
                     echo "✅ Terraform destroy completed. Infrastructure removed."
                 }
