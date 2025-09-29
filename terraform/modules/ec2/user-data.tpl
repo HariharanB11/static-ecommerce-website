@@ -65,9 +65,30 @@ aws ecr get-login-password --region ${region} \
 # -----------------------------
 # Pull image and run container (Terraform-safe)
 # -----------------------------
-sudo docker pull ${aws_account_id}.dkr.ecr.${region}.amazonaws.com/${ecr_repo}$${:}${app_image_tag}
+sudo docker pull ${aws_account_id}.dkr.ecr.${region}.amazonaws.com/${ecr_repo}:$${app_image_tag}
 sudo docker rm -f static-ecom || true
-sudo docker run -d --restart unless-stopped --name static-ecom -p 80$${80} ${aws_account_id}.dkr.ecr.${region}.amazonaws.com/${ecr_repo}$${:}${app_image_tag}
+sudo docker run -d --restart unless-stopped --name static-ecom -p 80:80 \
+  ${aws_account_id}.dkr.ecr.${region}.amazonaws.com/${ecr_repo}:$${app_image_tag}
+
+# Wait for container to start
+echo "Waiting for container to initialize..."
+sleep 30
+
+# Optional: health check on localhost
+max_attempts=10
+attempt=1
+until curl -s http://localhost >/dev/null; do
+    if [ $attempt -ge $max_attempts ]; then
+        echo "Container failed to start!"
+        exit 1
+    fi
+    echo "Waiting for container to respond... (Attempt: $attempt)"
+    sleep 5
+    attempt=$((attempt+1))
+done
+
+echo "Container is up and running!"
+
 
 
 
