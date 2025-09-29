@@ -23,6 +23,7 @@ pipeline {
     AWS_REGION = "us-east-1"
     ECR_REPO   = "static-ecommerce"
     IMAGE_TAG  = "${BUILD_NUMBER}"
+    ECR_REPO_URL = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO}"
   }
 
   stages {
@@ -81,11 +82,8 @@ pipeline {
         dir('terraform') {
           script {
             APP_EC2_PUBLIC_IP = sh(script: "terraform output -raw app_instance_public_ip", returnStdout: true).trim()
-            ECR_REPO_URL = sh(script: "terraform output -raw ecr_repository_url", returnStdout: true).trim()
             echo "EC2 Public IP: ${APP_EC2_PUBLIC_IP}"
-            echo "ECR Repo URL: ${ECR_REPO_URL}"
             env.APP_EC2_PUBLIC_IP = APP_EC2_PUBLIC_IP
-            env.ECR_REPO_URL = ECR_REPO_URL
           }
         }
       }
@@ -119,10 +117,12 @@ pipeline {
       when { expression { params.ACTION == 'create' } }
       steps {
         echo "Logging in to AWS ECR..."
-        sh '''
-          ECR_REGISTRY=$(echo ${ECR_REPO_URL} | cut -d/ -f1)
-          aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin $ECR_REGISTRY
-        '''
+        withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-creds']]) {
+          sh '''
+            ECR_REGISTRY=$(echo ${ECR_REPO_URL} | cut -d/ -f1)
+            aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin $ECR_REGISTRY
+          '''
+        }
       }
     }
 
@@ -147,16 +147,20 @@ pipeline {
       steps {
         echo "Deploying application on EC2..."
         sshagent (credentials: ['app-ec2-ssh']) {
-          sh '''
-            ssh -o StrictHostKeyChecking=no ec2-user@${APP_EC2_PUBLIC_IP} "
-              ECR_REGISTRY=$(echo ${ECR_REPO_URL} | cut -d/ -f1) &&
-              aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin $ECR_REGISTRY &&
+          sh """
+            ssh -o StrictHostKeyChecking=no ec2-user@${APP_EC2_PUBLIC_IP} '
+              echo "Logging in to AWS ECR..."
+              aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${ECR_REPO_URL%/*} &&
+              echo "Pulling latest Docker image..."
               docker pull ${ECR_REPO_URL}:${IMAGE_TAG} &&
+              echo "Stopping old container..."
               docker rm -f static-ecom || true &&
+              echo "Starting new container..."
               docker run -d --restart unless-stopped --name static-ecom -p 80:80 ${ECR_REPO_URL}:${IMAGE_TAG} &&
+              echo "Cleaning up unused images..."
               docker image prune -f
-            "
-          '''
+            '
+          """
         }
       }
     }
@@ -166,11 +170,11 @@ pipeline {
       steps {
         echo "Verifying if application is running..."
         sshagent (credentials: ['app-ec2-ssh']) {
-          sh '''
-            ssh -o StrictHostKeyChecking=no ec2-user@${APP_EC2_PUBLIC_IP} "
+          sh """
+            ssh -o StrictHostKeyChecking=no ec2-user@${APP_EC2_PUBLIC_IP} '
               docker ps | grep static-ecom
-            "
-          '''
+            '
+          """
         }
       }
     }
