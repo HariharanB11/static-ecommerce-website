@@ -80,14 +80,11 @@ pipeline {
       steps {
         dir('terraform') {
           script {
-            // Fetch the EC2 public IP from Terraform output
             APP_EC2_PUBLIC_IP = sh(script: "terraform output -raw app_instance_public_ip", returnStdout: true).trim()
-            echo "EC2 Public IP: ${APP_EC2_PUBLIC_IP}"
-            env.APP_EC2_PUBLIC_IP = APP_EC2_PUBLIC_IP
-
-            // Fetch the ECR repo URL from Terraform output
             ECR_REPO_URL = sh(script: "terraform output -raw ecr_repository_url", returnStdout: true).trim()
+            echo "EC2 Public IP: ${APP_EC2_PUBLIC_IP}"
             echo "ECR Repo URL: ${ECR_REPO_URL}"
+            env.APP_EC2_PUBLIC_IP = APP_EC2_PUBLIC_IP
             env.ECR_REPO_URL = ECR_REPO_URL
           }
         }
@@ -122,9 +119,10 @@ pipeline {
       when { expression { params.ACTION == 'create' } }
       steps {
         echo "Logging in to AWS ECR..."
-        withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-ecr-cred']]) {
-          sh "aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${ECR_REPO_URL%/*}"
-        }
+        sh '''
+          ECR_REGISTRY=$(echo ${ECR_REPO_URL} | cut -d/ -f1)
+          aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin $ECR_REGISTRY
+        '''
       }
     }
 
@@ -151,7 +149,8 @@ pipeline {
         sshagent (credentials: ['app-ec2-ssh']) {
           sh '''
             ssh -o StrictHostKeyChecking=no ec2-user@${APP_EC2_PUBLIC_IP} "
-              aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${ECR_REPO_URL%/*} &&
+              ECR_REGISTRY=$(echo ${ECR_REPO_URL} | cut -d/ -f1) &&
+              aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin $ECR_REGISTRY &&
               docker pull ${ECR_REPO_URL}:${IMAGE_TAG} &&
               docker rm -f static-ecom || true &&
               docker run -d --restart unless-stopped --name static-ecom -p 80:80 ${ECR_REPO_URL}:${IMAGE_TAG} &&
