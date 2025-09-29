@@ -1,6 +1,6 @@
 # Static E-Commerce Website with Terraform + Jenkins CI/CD
 
-This project provisions AWS infrastructure using **Terraform modules** and deploys a **Dockerized static e-commerce website** via a **Jenkins CI/CD pipeline** triggered by GitHub webhooks.
+This project provisions AWS infrastructure using **Terraform modules** and deploys a **Dockerized e-commerce website** via a **Jenkins CI/CD pipeline** triggered by GitHub webhooks.
 
 ## 🚀 Infrastructure
 - VPC, Subnets, Internet Gateway, Route Table
@@ -28,10 +28,6 @@ This project provisions AWS infrastructure using **Terraform modules** and deplo
 - `<JENKINS_CREDENTIAL_ID>` → Jenkins credential for AWS CLI
 - `<ECR_REPO_NAME>` → ECR repository name
 
-## 📌 Notes
-- **State**: Uses local state only (no S3 backend).
-- **Secrets**: Never push `.pem` keys, `.tfstate`, or AWS credentials to GitHub.
-- **Large files**: `.dockerignore` ensures unnecessary files don’t bloat the image.
 
 ---
 
