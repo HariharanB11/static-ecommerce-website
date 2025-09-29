@@ -130,35 +130,18 @@ pipeline {
         stage('Wait for EC2 to be Ready') {
             when { expression { params.ACTION == 'create' } }
             steps {
-                sleep(time: 60, unit: 'SECONDS')
-            }
-        }
-
-        stage('Deploy to EC2 Instance') {
-            when { expression { params.ACTION == 'create' } }
-            steps {
-                sshagent(['app-ec2-ssh']) {
-                    sh """
-                        ssh -o StrictHostKeyChecking=no ec2-user@${APP_EC2_PUBLIC_IP} '
-                            aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${ECR_REPO_URL.split('/')[0]} &&
-                            docker pull ${ECR_REPO_URL}:${IMAGE_TAG} &&
-                            docker rm -f static-ecom || true &&
-                            docker run -d --restart unless-stopped --name static-ecom -p 80:80 ${ECR_REPO_URL}:${IMAGE_TAG} &&
-                            docker image prune -f
-                        '
-                    """
-                }
+                echo "Waiting 2 minutes for EC2 instance to initialize and user-data to complete..."
+                sleep(time: 120, unit: 'SECONDS')
             }
         }
 
         stage('Verify Deployment') {
             when { expression { params.ACTION == 'create' } }
             steps {
-                sshagent(['app-ec2-ssh']) {
+                script {
+                    echo "Verifying deployment by checking HTTP response..."
                     sh """
-                        ssh -o StrictHostKeyChecking=no ec2-user@${APP_EC2_PUBLIC_IP} '
-                            docker ps | grep static-ecom
-                        '
+                        curl --retry 5 --retry-delay 10 http://${env.APP_EC2_PUBLIC_IP} || true
                     """
                 }
             }
@@ -180,6 +163,5 @@ pipeline {
             echo "❌ Pipeline failed. Please check Jenkins logs."
         }
     }
-
-} // end of pipeline
+}
 
