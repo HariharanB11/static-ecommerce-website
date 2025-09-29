@@ -103,7 +103,7 @@ sleep 15
 
 max_attempts=12
 attempt=1
-until curl -s -o /dev/null -w "%{http_code}" [http://localhost:80](http://localhost:80) | grep -q "200"; do
+until curl -s -o /dev/null -w "%%{http_code}" [http://localhost:80](http://localhost:80) | grep -q "200"; do
 if [ $attempt -ge $max_attempts ]; then
 echo "❌ Container failed to start after $max_attempts attempts!"
 exit 1
@@ -114,6 +114,7 @@ attempt=$((attempt+1))
 done
 
 echo "✅ Container is up and running!"
+
 
 
 
