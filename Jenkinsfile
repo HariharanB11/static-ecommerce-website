@@ -81,7 +81,7 @@ pipeline {
             steps {
                 dir('terraform') {
                     script {
-                        env.APP_EC2_PUBLIC_IP = sh(script: "terraform output -raw app_instance_public_ip", returnStdout: true).trim()
+                        env.APP_EC2_PUBLIC_IP = sh(script: "terraform output -raw public_ip", returnStdout: true).trim()
                         echo "EC2 Public IP: ${env.APP_EC2_PUBLIC_IP}"
                     }
                 }
@@ -140,9 +140,27 @@ pipeline {
             steps {
                 script {
                     echo "Verifying deployment by checking HTTP response..."
-                    sh """
-                        curl --retry 5 --retry-delay 10 http://${env.APP_EC2_PUBLIC_IP} || true
-                    """
+                    def maxRetries = 12
+                    def waitTime = 10
+                    def success = false
+
+                    for (int i = 1; i <= maxRetries; i++) {
+                        try {
+                            def response = sh(script: "curl -s -o /dev/null -w '%{http_code}' http://${env.APP_EC2_PUBLIC_IP}", returnStdout: true).trim()
+                            if (response == "200") {
+                                echo "Application is live and responding on port 80!"
+                                success = true
+                                break
+                            }
+                        } catch (err) {
+                            echo "Attempt ${i} failed, retrying in ${waitTime}s..."
+                        }
+                        sleep(waitTime)
+                    }
+
+                    if (!success) {
+                        error("❌ Deployment verification failed. Application is not responding on port 80.")
+                    }
                 }
             }
         }
