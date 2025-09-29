@@ -27,35 +27,51 @@ fi
 # -----------------------------
 if command -v yum >/dev/null 2>&1; then
     amazon-linux-extras install docker -y || yum install -y docker
-    systemctl start docker
-    systemctl enable docker
-    usermod -a -G docker ec2-user || true
 elif command -v apt-get >/dev/null 2>&1; then
     apt-get install -y docker.io
-    systemctl start docker
-    systemctl enable docker
-    usermod -a -G docker ubuntu || true
+fi
+
+# Start Docker service
+sudo systemctl start docker
+sudo systemctl enable docker
+
+# Add default user to docker group
+if command -v yum >/dev/null 2>&1; then
+    sudo usermod -aG docker ec2-user || true
+elif command -v apt-get >/dev/null 2>&1; then
+    sudo usermod -aG docker ubuntu || true
 fi
 
 # -----------------------------
-# Install Docker Compose (optional)
+# Wait for Docker daemon to be ready
+# -----------------------------
+timeout=30
+while ! docker info >/dev/null 2>&1 && [ $timeout -gt 0 ]; do
+    echo "Waiting for Docker to start..."
+    sleep 3
+    timeout=$((timeout-3))
+done
+
+# -----------------------------
+# Optional: Install Docker Compose
 # -----------------------------
 if [ "${docker_compose}" = "true" ]; then
-    curl -L "https://github.com/docker/compose/releases/download/2.20.2/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
-    chmod +x /usr/local/bin/docker-compose
+    sudo curl -L "https://github.com/docker/compose/releases/download/2.20.2/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+    sudo chmod +x /usr/local/bin/docker-compose
 fi
 
 # -----------------------------
 # AWS ECR login
 # -----------------------------
 aws ecr get-login-password --region ${region} \
-  | docker login --username AWS --password-stdin ${aws_account_id}.dkr.ecr.${region}.amazonaws.com || true
+  | sudo docker login --username AWS --password-stdin ${aws_account_id}.dkr.ecr.${region}.amazonaws.com
 
 # -----------------------------
 # Pull image and run container
 # -----------------------------
-docker pull ${aws_account_id}.dkr.ecr.${region}.amazonaws.com/${ecr_repo}:${app_image_tag} || true
-docker rm -f static-ecom || true
-docker run -d --restart unless-stopped --name static-ecom -p 80:80 ${aws_account_id}.dkr.ecr.${region}.amazonaws.com/${ecr_repo}:${app_image_tag} || true
+sudo docker pull ${aws_account_id}.dkr.ecr.${region}.amazonaws.com/${ecr_repo}:${app_image_tag}
+sudo docker rm -f static-ecom || true
+sudo docker run -d --restart unless-stopped --name static-ecom -p 80:80 ${aws_account_id}.dkr.ecr.${region}.amazonaws.com/${ecr_repo}:${app_image_tag}
+
 
 
