@@ -81,7 +81,7 @@ pipeline {
             steps {
                 dir('terraform') {
                     script {
-                        env.APP_EC2_PUBLIC_IP = sh(script: "terraform output -raw public_ip", returnStdout: true).trim()
+                        env.APP_EC2_PUBLIC_IP = sh(script: "terraform output -raw app_instance_public_ip", returnStdout: true).trim()
                         echo "EC2 Public IP: ${env.APP_EC2_PUBLIC_IP}"
                     }
                 }
