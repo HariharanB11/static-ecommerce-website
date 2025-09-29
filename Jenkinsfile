@@ -26,6 +26,7 @@ pipeline {
   }
 
   stages {
+
     stage('Checkout Source Code') {
       steps {
         echo "Checking out code from GitHub..."
@@ -79,7 +80,8 @@ pipeline {
       steps {
         dir('terraform') {
           script {
-            APP_EC2_PUBLIC_IP = sh(script: "terraform output -raw app_instance_public_ip", returnStdout: true).trim()
+            // Fetch the EC2 public IP from Terraform output
+            APP_EC2_PUBLIC_IP = sh(script: "terraform output -raw public_ip", returnStdout: true).trim()
             echo "EC2 Public IP: ${APP_EC2_PUBLIC_IP}"
             env.APP_EC2_PUBLIC_IP = APP_EC2_PUBLIC_IP
           }
@@ -99,7 +101,8 @@ pipeline {
       when { expression { params.ACTION == 'create' } }
       steps {
         echo "Building Docker image..."
-        sh "docker build -t ${ECR_REPO}:${IMAGE_TAG} site/"
+        // Added --no-cache to ensure fresh build
+        sh "docker build --no-cache -t ${ECR_REPO}:${IMAGE_TAG} site/"
       }
     }
 
@@ -129,6 +132,14 @@ pipeline {
       }
     }
 
+    stage('Wait for EC2 to be Ready') {
+      when { expression { params.ACTION == 'create' } }
+      steps {
+        echo "Waiting for EC2 to finish initialization (Docker should be installed via user-data)..."
+        sleep(time: 60, unit: 'SECONDS') // optional: wait 60 sec for EC2 to finish boot
+      }
+    }
+
     stage('Deploy to EC2 Instance') {
       when { expression { params.ACTION == 'create' } }
       steps {
@@ -136,10 +147,19 @@ pipeline {
         sshagent (credentials: ['app-ec2-ssh']) {
           sh """
             ssh -o StrictHostKeyChecking=no ec2-user@${APP_EC2_PUBLIC_IP} '
+              echo "Logging in to AWS ECR..."
               aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${params.AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com &&
+              
+              echo "Pulling latest Docker image..."
               docker pull ${params.AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO}:${IMAGE_TAG} &&
+              
+              echo "Stopping old container..."
               docker rm -f static-ecom || true &&
+              
+              echo "Starting new container..."
               docker run -d --restart unless-stopped --name static-ecom -p 80:80 ${params.AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO}:${IMAGE_TAG} &&
+              
+              echo "Cleaning up unused images..."
               docker image prune -f
             '
           """
@@ -160,6 +180,7 @@ pipeline {
         }
       }
     }
+
   }
 
   post {
